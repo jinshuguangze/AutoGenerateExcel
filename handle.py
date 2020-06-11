@@ -10,7 +10,7 @@ from pinyinlib import Pinyin
 random.seed(time.time())
 
 # 读取原始表格
-df = pd.read_excel(os.path.dirname(__file__)+'/input.xlsx')
+df = pd.read_table(os.path.dirname(__file__)+'/input.txt',sep='!',encoding='gbk',low_memory=False)
 
 # 生成序号列表
 serial = []
@@ -38,10 +38,15 @@ dfo5 = pd.DataFrame({'英文名': english_name})
 # 生成性别列表
 gender = []
 for i in id_number:
-    if(int(i[-2]) % 2 == 0):
-        gender.append(0)
+    # 如果是身份证号码，则生成性别
+    if(len(i)==18):
+        # 男：1，女：2，未知：0
+        if(int(i[-2]) % 2 == 0):
+            gender.append(2)
+        else:
+            gender.append(1)
     else:
-        gender.append(1)
+        gender.append(0)
 dfo6 = pd.DataFrame({'性别': gender})
 
 # 生成国籍/地区列表
@@ -71,7 +76,15 @@ for i in list(map(str, df.loc[:, '固话'].values.tolist())):
 dfo8 = pd.DataFrame({'固定电话': landline})
 
 # 生成手机号列表
-dfo9 = pd.DataFrame({'手机号': list(map(str, df.loc[:, '手机号'].values.tolist()))})
+phone_number=[]
+for i in list(map(str, df.loc[:, '手机号'].values.tolist())):
+    # 手机号自带的情况
+    if(i!='nan'):
+        phone_number.append(i)
+    # 手机号不自带的情况
+    else:
+        phone_number.append('')
+dfo9 = pd.DataFrame({'手机号': phone_number})
 
 # 生成通讯地址列表
 dfo10 = pd.DataFrame({'通讯地址': df.loc[:, '联系地址'].values.tolist()})
@@ -79,7 +92,6 @@ dfo10 = pd.DataFrame({'通讯地址': df.loc[:, '联系地址'].values.tolist()}
 # 生成职业列表
 career_list = [
     '49900~',
-    '50000~',
     '50100~',
     '50101~',
     '50102~',
@@ -109,43 +121,51 @@ career_list = [
     '50506~',
     '50599~',
     '59900~',
-    '60000~',
     '60100~',
     '60101~'
 ]
 career = []
-for i in list(map(str, df.loc[:, '职业'].values.tolist())):
-    # 职业自带的情况
-    if(i != 'nan'):
-        career.append(i.replace('.0',''))
-    # 职业不自带的情况
-    else:
-        # 从职业列表中随机生成职业代码，随机生成出来的号码尾部有“~”号
-        career.append(random.sample(career_list, 1)[0])
+for i in range(0, df.shape[0]):
+    # 从职业列表中随机生成职业代码，随机生成出来的号码尾部有“~”号
+    career.append(random.sample(career_list, 1)[0])
 dfo11 = pd.DataFrame({'职业': career})
 
 # 生成是否居住满一年列表
 lived_full_year = []
 for i in id_number:
-    if(i[0:6] == '429006' or i[0:6] == '422428'):
-        lived_full_year.append('1')
+    # 如果是身份证号码，则生成居住是否满一年
+    if(len(i)==18):
+        if(i[0:6] == '429006' or i[0:6] == '422428'):
+            lived_full_year.append('1')
+        else:
+            lived_full_year.append('0')
+    # 否则，生成“1”
     else:
-        lived_full_year.append('0')
+        lived_full_year.append('1')
 dfo12 = pd.DataFrame({'是否居住满一年': lived_full_year})
 
 # 生成发证机关所在地代码列表
 locate_code = []
 for i in id_number:
-    if(i[0:6] == '422428'):
-        locate_code.append('429006')
+    # 如果是身份证号码，则生成发证机关所在地代码
+    if(len(i)==18):
+        if(i[0:6] == '422428'):
+            locate_code.append('429006')
+        else:
+            locate_code.append(i[0:6])
+    # 否则，生成“429006”
     else:
-        locate_code.append(i[0:6])
+        locate_code.append('429006')
 dfo13 = pd.DataFrame({'发证机关所在地代码': locate_code})
 
 # 生成证件有效截止日期列表
 birthdate = []
 for i in id_number:
-    birthdate.append(int(i[6:14]))
+    # 如果是身份证号码，则生成出生日期
+    if(len(i)==18):
+        birthdate.append(int(i[6:14]))
+    else:
+        birthdate.append(0)
 turncate_date = []
 n = -1
 for i in list(map(str, df.loc[:, '证件到期日'].values.tolist())):
@@ -158,8 +178,8 @@ for i in list(map(str, df.loc[:, '证件到期日'].values.tolist())):
         if(int(i) >= 20200610):
             turncate_date.append(i)
         else:
-            # 90后，截止日期往后延10年，判断闰年情况
-            if(birthdate[n] >= 19900610):
+            # 生日为空或90后，截止日期往后延10年，判断闰年情况
+            if(birthdate[n]==0 or birthdate[n] >= 19900610):
                 if(i[4:8] == '0229'):
                     years = int(i[0:4])+10
                     if (not((years % 4 == 0 and years % 100 != 0) or (years % 400 == 0))):
@@ -179,8 +199,11 @@ for i in list(map(str, df.loc[:, '证件到期日'].values.tolist())):
                 turncate_date.append('20991231')
     # 证件有效截止日期非自带的情况
     else:
+        # 生日为空，则来自户口本信息，留空
+        if(birthdate[n]==0):
+            turncate_date.append('')
         # 未满16岁的截止日期改为16岁生日当天，判断闰年情况
-        if(birthdate[n] > 20041231):
+        elif(birthdate[n] > 20041231):
             if(str(birthdate[n])[4:8] == '0229'):
                 years = int(str(birthdate[n])[0:4])+16
                 if (not((years % 4 == 0 and years % 100 != 0) or (years % 400 == 0))):
